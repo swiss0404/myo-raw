@@ -9,9 +9,11 @@ import time
 import pickle
 import serial
 from serial.tools.list_ports import comports
-
+import pandas as pd
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning) 
 from common import *
-
+database_file = 'database.p'
 def multichr(ords):
     if sys.version_info[0] >= 3:
         return bytes(ords)
@@ -397,8 +399,80 @@ class MyoRaw(object):
         for h in self.arm_handlers:
             h(arm, xdir)
 
+def name_prompt(data):
+    print('please choose your name')
+    for i in range(len(data['name'].unique())):
+        print(str(i) +': '+ data['name'].unique()[i])
+    name_num = input('type in your name number : ')
+    print('\n---------------------------------\n')
+    try:
+        name_num = int(name_num)
+        if 0 <= name_num <= len(data['name'].unique()) - 1:
+            return data['name'].unique()[name_num]
+        else:
+            print('Number is not within the range')
+            name_prompt(data)
+    except ValueError:
+        print('Invalid value')
+        name_prompt(data)
+
+def gesture_prompt(data, name):
+    print('please choose gesture')
+    for i in range(len(data[data.name == name]['gesture'])):
+        print(str(i) +': '+ data[data.name == name]['gesture'].iloc[i])
+    gesture_num = input('type in gesture number: ')
+    print('\n---------------------------------\n')
+    try:
+        gesture_num = int(gesture_num)
+        if 0 <= int(gesture_num) <= len(data[data.name == name]['gesture']) - 1:
+            return data[data.name == name]['gesture'].iloc[gesture_num]
+        else:
+            print('Number is not within the range')
+            gesture_prompt(data, name)
+    except ValueError:
+        print('Invalid value')
+        gesture_prompt(data, name)
+
+def mode_prompt () :
+    print('select mode')
+    print('0: recording continuous\n1: record only once\n2: add gesture name')
+    mode = input('type in mode number: ')
+    print('\n---------------------------------\n')
+    try:
+        mode = int(mode)
+        if 0 <= int(mode) <= 2:
+            return mode
+        else:
+            print('Number is not within the range')
+            mode_prompt()
+    except ValueError:
+        print('Invalid value')
+        mode_prompt()
+    
+def add_new_gesture(data,database_file,name):
+    new_gesture_name = input('type new gesture name: ')
+    try:
+        str(new_gesture_name)
+        if new_gesture_name not in data[data.name == name]['gesture'].to_list():
+            data = data.append({'name': name, 'gesture': new_gesture_name ,'repetition' : 0}, ignore_index=True)
+            pickle.dump(data, open(database_file, "wb" ))
+        else: 
+            print('This gesture already exists')
+            add_new_gesture(data,database_file,name)
+    except ValueError:
+        print('input invalid') 
+        add_new_gesture(data,database_file,name)
+
 
 if __name__ == '__main__':
+    data = pickle.load(open(database_file, "rb" ))
+    name = name_prompt(data)
+    mode = mode_prompt()
+    if mode == 2:
+        add_new_gesture(data,database_file,name)
+        data = pickle.load(open(database_file, "rb" ))
+    gesture = gesture_prompt(data, name)
+
     try:
         import pygame
         from pygame.locals import *
@@ -458,7 +532,7 @@ if __name__ == '__main__':
 
     m.add_arm_handler(lambda arm, xdir: print('arm', arm, 'xdir', xdir))
     m.add_pose_handler(lambda p: print('pose', p))
-
+    is_recording = False
     try:
         while True:
             m.run(1)
@@ -472,19 +546,27 @@ if __name__ == '__main__':
                         raise KeyboardInterrupt()
                     elif ev.type == KEYDOWN:
                         if ev.unicode == 'r':
-                            name = ""
-                            gesture_name = ""
-                            name = input("name: ")
-                            gesture_name = input("gesture_name: ")
+                            print('start record')
                             emg_accu = []
                             imu_accu = []
                             m.add_emg_handler(save_emg)
                             m.add_imu_handler(save_imu)
+                            is_recording = True
                         if ev.unicode == 's':
-                            pickle.dump( emg_accu , open(name + "_" + gesture_name + "_" + "emg_accu.p", "wb" ) )
-                            pickle.dump( imu_accu , open(name + "_" + gesture_name + "_" + "imu_accu.p", "wb" ) )
-                            emg_accu = []
-                            imu_accu = []
+                            if is_recording:
+                                data = pickle.load(open(database_file, "rb" ))
+                                pre_add_rep = int(data[(data.name == name) & (data.gesture == gesture)]['repetition'])
+                                pickle.dump( emg_accu , open(name + "_" + gesture + "_" + str(pre_add_rep+1) + "_" + "emg_accu.p", "wb" ) )
+                                pickle.dump( imu_accu , open(name + "_" + gesture + "_" + str(pre_add_rep+1) + "_" + "imu_accu.p", "wb" ) )
+                                data.loc[(data.name == name) & (data.gesture == gesture),['repetition']] = int(data[(data.name == name) & (data.gesture == gesture)]['repetition']) + 1
+                                pickle.dump(data , open(database_file, "wb" ))
+                                emg_accu = []
+                                imu_accu = []
+                                print('record saved')
+                                if mode == '1':
+                                    gesture = gesture_prompt(database_file, name)
+                            else:
+                                print('recording is not started')
                         if K_1 <= ev.key <= K_3:
                             m.vibrate(ev.key - K_0)
                         if K_KP1 <= ev.key <= K_KP3:
