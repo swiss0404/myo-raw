@@ -6,7 +6,7 @@ import struct
 import sys
 import threading
 import time
-
+import pickle
 import serial
 from serial.tools.list_ports import comports
 
@@ -288,7 +288,7 @@ class MyoRaw(object):
                 gyro = vals[7:10]
                 self.on_imu(quat, acc, gyro)
             elif attr == 0x23:
-                typ, val, xdir = unpack('3B', pay)
+                typ, val, xdir,_,_,_ = unpack('6B', pay)
 
                 if typ == 1: # on arm
                     self.on_arm(Arm(val), XDirection(xdir))
@@ -363,7 +363,7 @@ class MyoRaw(object):
         self.write_attr(0x19, b'\x01\x03\x01\x01\x01')
 
     def vibrate(self, length):
-        if length in xrange(1, 4):
+        if length in range(1, 4):
             ## first byte tells it to vibrate; purpose of second byte is unknown
             self.write_attr(0x19, pack('3B', 3, 1, length))
 
@@ -403,6 +403,7 @@ if __name__ == '__main__':
         import pygame
         from pygame.locals import *
         HAVE_PYGAME = True
+        print('PyGame enabled')
     except ImportError:
         HAVE_PYGAME = False
 
@@ -461,12 +462,29 @@ if __name__ == '__main__':
     try:
         while True:
             m.run(1)
-
+            def save_emg(emg, moving):
+                emg_accu.append([emg,moving])
+            def save_imu(quat, acc, gyro):
+                imu_accu.append([quat, acc, gyro])
             if HAVE_PYGAME:
                 for ev in pygame.event.get():
                     if ev.type == QUIT or (ev.type == KEYDOWN and ev.unicode == 'q'):
                         raise KeyboardInterrupt()
                     elif ev.type == KEYDOWN:
+                        if ev.unicode == 'r':
+                            name = ""
+                            gesture_name = ""
+                            name = input("name: ")
+                            gesture_name = input("gesture_name: ")
+                            emg_accu = []
+                            imu_accu = []
+                            m.add_emg_handler(save_emg)
+                            m.add_imu_handler(save_imu)
+                        if ev.unicode == 's':
+                            pickle.dump( emg_accu , open(name + "_" + gesture_name + "_" + "emg_accu.p", "wb" ) )
+                            pickle.dump( imu_accu , open(name + "_" + gesture_name + "_" + "imu_accu.p", "wb" ) )
+                            emg_accu = []
+                            imu_accu = []
                         if K_1 <= ev.key <= K_3:
                             m.vibrate(ev.key - K_0)
                         if K_KP1 <= ev.key <= K_KP3:
