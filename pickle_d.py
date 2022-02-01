@@ -1,7 +1,7 @@
 import pickle
 import pandas as pd
 import matplotlib.pyplot as plt
-pad = pickle.load(open('swiss_scissors_emg_accu.p','rb'))
+pad = pickle.load(open('/Users/swiss/projects/myo-raw/swiss_fist_12_emg_accu.p','rb'))
 new_emg = []
 for sample in pad:
     emg = sample[0]
