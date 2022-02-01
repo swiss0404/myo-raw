@@ -13,7 +13,7 @@ import pandas as pd
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning) 
 from common import *
-database_file = 'database.p'
+database_file = 'database.csv'
 def multichr(ords):
     if sys.version_info[0] >= 3:
         return bytes(ords)
@@ -247,11 +247,11 @@ class MyoRaw(object):
             ## 1000, EMG data becomes slower to respond to changes. In conclusion,
             ## 1000 is probably a good value.
             C = 1000
-            emg_hz = 50
+            emg_hz = 1000
             ## strength of low-pass filtering of EMG data
             emg_smooth = 100
 
-            imu_hz = 50
+            imu_hz = 1000
 
             ## send sensor parameters, or we don't get any data
             self.write_attr(0x19, pack('BBBBHBBBBB', 2, 9, 2, 1, C, emg_smooth, C // emg_hz, imu_hz, 0, 0))
@@ -455,7 +455,7 @@ def add_new_gesture(data,database_file,name):
         str(new_gesture_name)
         if new_gesture_name not in data[data.name == name]['gesture'].to_list():
             data = data.append({'name': name, 'gesture': new_gesture_name ,'repetition' : 0}, ignore_index=True)
-            pickle.dump(data, open(database_file, "wb" ))
+            data.to_csv(open(database_file, "wb" ), index = False)
         else: 
             print('This gesture already exists')
             add_new_gesture(data,database_file,name)
@@ -465,12 +465,12 @@ def add_new_gesture(data,database_file,name):
 
 
 if __name__ == '__main__':
-    data = pickle.load(open(database_file, "rb" ))
+    data = pd.read_csv(open(database_file, "rb" ))
     name = name_prompt(data)
     mode = mode_prompt()
     if mode == 2:
         add_new_gesture(data,database_file,name)
-        data = pickle.load(open(database_file, "rb" ))
+        data = pd.read_csv(open(database_file, "rb" ))
     gesture = gesture_prompt(data, name)
 
     try:
@@ -554,12 +554,12 @@ if __name__ == '__main__':
                             is_recording = True
                         if ev.unicode == 's':
                             if is_recording:
-                                data = pickle.load(open(database_file, "rb" ))
+                                data = pd.read_csv(open(database_file, "rb" ))
                                 pre_add_rep = int(data[(data.name == name) & (data.gesture == gesture)]['repetition'])
                                 pickle.dump( emg_accu , open(name + "_" + gesture + "_" + str(pre_add_rep+1) + "_" + "emg_accu.p", "wb" ) )
                                 pickle.dump( imu_accu , open(name + "_" + gesture + "_" + str(pre_add_rep+1) + "_" + "imu_accu.p", "wb" ) )
                                 data.loc[(data.name == name) & (data.gesture == gesture),['repetition']] = int(data[(data.name == name) & (data.gesture == gesture)]['repetition']) + 1
-                                pickle.dump(data , open(database_file, "wb" ))
+                                data.to_csv(open(database_file, "wb" ), index = False)
                                 emg_accu = []
                                 imu_accu = []
                                 print('record saved')
